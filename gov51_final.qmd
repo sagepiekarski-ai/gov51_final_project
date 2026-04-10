@@ -1,0 +1,105 @@
+---
+title: "gov51_final_project"
+format: html
+editor: visual
+---
+
+## Piekarski Final Project 
+
+#### Milestone 2: 
+
+```{r}
+
+#clear the workspace and clear console
+rm(list=ls())
+cat('\014')
+
+#Install and load packages
+if (!require(tidyverse)) install.packages("tidyverse"); library(tidyverse)
+
+```
+
+```{r}
+
+#read csv
+skaters_2008_to_2024 <- read.csv("Data/Raw/skaters_2008_to_2024.csv")
+
+#understand data
+names(skaters_2008_to_2024)
+
+```
+
+```{r}
+#clean the data
+player_year <- skaters_2008_to_2024 %>% 
+  filter(situation == "all") %>% 
+  arrange(playerId, season) %>% 
+  group_by(playerId) %>% 
+  mutate(next_goals = lead(I_F_goals),
+         goal_change = next_goals - I_F_goals) %>% 
+  ungroup() %>% 
+  filter(!is.na(goal_change))
+```
+
+```{r}
+#define a breakout player
+breakout_threshold <- quantile(player_year$goal_change, 0.90, na.rm = TRUE)
+player_year <- player_year %>% 
+  mutate(breakout = ifelse(goal_change >= breakout_threshold, 1, 0))
+#check
+mean(player_year$breakout)
+```
+
+As a result, in this study we define a breakout player as someone whose increase in number of goals in a given season, t, to season t+1, lies in the top 10% of all NHL skaters' goal change (next season goals - current season goals.
+
+```{r}
+#summary statistics table
+summary_table <- player_year %>% 
+  summarise(observations = n(),
+            avg_goals = mean(I_F_goals, na.rm = TRUE),
+            avg_next_goals = mean(next_goals, na.rm = TRUE),
+            avg_goal_change = mean(goal_change, na.rm = TRUE),
+            avg_xgoals = mean(I_F_xGoals, na.rm = TRUE),
+            avg_shots = mean(I_F_shotsOnGoal, na.rm = TRUE),
+            breakout_rate = mean(breakout))
+summary_table
+
+```
+
+Based on this summary statistic table, we observe that when examining NHL players, there average goals scored in the current season (8.426) is incredibly similar albeit a tiny bit smaller that their average goals in the next season (8.432). Though these averages are remarkably similar across all players, it is very likely that there is quite a bit of variation within players given position, time on the ice, power plays, penalty kills, etc.
+
+```{r}
+#correlations
+cor_table <- player_year %>% 
+  select(I_F_goals, next_goals, goal_change, I_F_xGoals, I_F_shotsOnGoal, games_played) %>%
+  cor(use = "complete.obs")
+cor_table
+  
+```
+
+Based on this correlation table, we observe very strong positive correlation between the current season's goals and next season's goals at 0.751. This positive correlation is also observed ebtween the season's expected goals and next season goals with an approximate correlation of 0.752. Based off of these findings, I would tend to believe that NHLers who score a lot of goals tend to continue doing well into the next season, but obviously there are some exceptions to this trend or phenomenon. It is also interesting how extremely positively correlated expected season goals is with actual goals at (0.94) and shots on goal is also very positively associated (0.87) with actual goals. This suggests that the number of scoring opportunities a player gets, the more opportunities they have to shoot on goal, often that is associated with higher player quality or ability to score more goals. I am wondering if maybe shots on goal is a better predictor of breakout player because it may reduce randomness more than say just actual goals would.
+
+Ultimately, if we are evaluating a player as a breakout player, we would likely observe a positive relationship between probability of becoming a breakout player and shots on goal or goals. Some other things that are important to remember about a breakout player is that NHLers who have been around for a while and played in a lot of games are probably pretty well known and would not really get a breakout status. I also think position effects are relevant to consider becaus eit is probably a lot moe likely that a forward scores than a defenseman, so breakout players would inherently be a bit biased towards forwards unless moving forward in the project I set separate definitions for the two.
+
+```{r}
+#create a figure
+ggplot(player_year, aes(x = I_F_xGoals, y = goal_change)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Current Season xGoals vs Next Season Goal Increase",
+       x = "Current Season Expected Goals",
+       y = "Next Season Goal Change")+
+  theme_minimal()
+```
+
+With this figure, I was trying to get at the question of whether NHL players with high current season goal counts tend to also have larger next season goal changes. It seems kidn of counterintuitive that the line of best fit would have a negative slope, but now that I think about it I suppose it makes sense because those that are expected to have high current season goals are probably more established well known players, so they have less room to grow tremendously, score more goals next season, and become a breakout player in so many words.
+
+```{r}
+mod1 <- lm(breakout ~ I_F_xGoals + I_F_shotsOnGoal + games_played + position, 
+           data = player_year)
+summary(mod1)
+```
+
+Based on this model, we observe a very low r-squared of 0.04825. This isn't amazing as it proves that there are a lot of outside variables impacting breakout players that our model does not account for. However, the process of writing this reflection has given me a lot I can think about and add to this project to improve it. For instance, one thing that may be a bit challenging but is probably important is who is on your line and if the culture, flow, passing, and mechanics, just gel well between those two people. Other examples may include, time on the ice, injuries, team culture, coaches, etc. All of these reasons could greatly impact who scores more and when.
+
+Most of all, completing milestone 2 has illuminated to me that I still have a ways to go in this project. Identifying a breakout player is challenging because successful and good play is often super context dependent with who is on the ice, how long they are there, who is injured, power play vs penalty kill time, coaching decisions, team culture, etc and my current exploratory endeavors haven't accounted for these factors. There does seem to be indication that we can predict future breakouts based on these current or previous season stats, and I am thinking of looking to do so in a LASSO model in which LASSO will determine the most important predictors and I can move ahead from there.
